@@ -3,10 +3,12 @@ import {
   getClosedChats,
   getChatMessages,
   getUser,
+  getSignedFileUrl,
   type ChannelUserChat,
   type ChannelUser,
   type ChannelManager,
 } from "./channel-talk";
+import { uploadImageToStorage } from "./supabase";
 import {
   findPeopleByEmail,
   createPeople,
@@ -77,6 +79,21 @@ async function processChat(
   const chatId = chat.id;
 
   const messages = await getChatMessages(chatId);
+
+  // 이미지 → Supabase Storage 업로드
+  for (const m of messages) {
+    if (!m.files || m.files.length === 0) continue;
+    for (const f of m.files) {
+      if (!f.contentType?.startsWith("image/")) continue;
+      try {
+        const signedUrl = await getSignedFileUrl(chatId, f.key);
+        f.publicUrl = await uploadImageToStorage(signedUrl, chatId, f.id, f.contentType);
+      } catch (e) {
+        console.warn(`[bulk] 이미지 업로드 실패 (${f.name}): ${(e as Error).message}`);
+      }
+    }
+  }
+
   const conversationText = formatConversation({ messages, managers, user });
   const analysis = await analyzeConversation(conversationText);
 
@@ -125,11 +142,13 @@ async function processChat(
   }
 
   // 채널톡 오브젝트 생성
+  const channelTalkLink = `https://desk.channel.io/salesmap/user-chats/${name}-${chatId}`;
   const fieldList: { name: string; [key: string]: unknown }[] = [
     { name: "문의 내용", stringValue: analysis.shortSummary },
     { name: "문의 유형", stringValueList: [analysis.inquiryType] },
     { name: "기능 카테고리", stringValueList: [analysis.featureCategory] },
     { name: "생성 날짜", dateValue: new Date(chat.closedAt).toISOString() },
+    { name: "채널톡 링크", stringValue: channelTalkLink },
   ];
   if (roomId) fieldList.push({ name: "워크스페이스 ID", stringValue: roomId });
   if (userId) fieldList.push({ name: "유저 ID", stringValue: userId });
@@ -142,10 +161,11 @@ async function processChat(
 
   const customObject = await createCustomObject(CHANNEL_TALK_DEFINITION_ID, fieldList as any);
 
-  // 노트 생성
-  const conversationHtml = formatConversationHtml({ messages, managers, user });
+  // 노트 생성 (고객 + 채널톡 커오 양쪽)
+  const conversationHtml = formatConversationHtml({ messages, managers, user, chatId });
   const memoText = buildMemoText(analysis.detailedSummary, conversationHtml);
   await updatePeople(peopleId, { memo: memoText });
+  await createCustomObjectMemo(customObject.id, memoText);
 
   // 처리 기록
   await markProcessed({
