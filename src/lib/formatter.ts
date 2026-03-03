@@ -4,6 +4,7 @@ interface FormatOptions {
   messages: ChannelMessage[];
   managers: ChannelManager[];
   user: ChannelUser;
+  chatId?: string;
 }
 
 /** 메시지를 대화 원문 텍스트로 포맷팅 (Gemini 분석용) */
@@ -42,10 +43,11 @@ export function formatConversation({ messages, managers, user }: FormatOptions):
       lastSpeaker = name;
     }
 
-    if (m.plainText?.trim()) bodyLines.push(m.plainText.trim());
+    const prefix = isPrivate(m) ? "(내부 메시지) " : "";
+    if (m.plainText?.trim()) bodyLines.push(prefix + m.plainText.trim());
     if (m.files && m.files.length > 0) {
       for (const f of m.files) {
-        bodyLines.push(`[이미지: ${f.name}] https://cf.channel.io/${f.key}`);
+        bodyLines.push(f.publicUrl ? `[이미지: ${f.publicUrl}]` : `[이미지: ${f.name}]`);
       }
     }
   });
@@ -54,7 +56,7 @@ export function formatConversation({ messages, managers, user }: FormatOptions):
 }
 
 /** 대화를 카톡 스타일 HTML로 포맷팅 (노트용) */
-export function formatConversationHtml({ messages, managers, user }: FormatOptions): string {
+export function formatConversationHtml({ messages, managers, user, chatId }: FormatOptions): string {
   const managerMap = new Map(managers.map((m) => [m.id, m.name]));
 
   const filtered = messages.filter(
@@ -78,12 +80,19 @@ export function formatConversationHtml({ messages, managers, user }: FormatOptio
 
     // 메시지 내용 조합
     const parts: string[] = [];
+    const privatePrefix = isPrivate(m) ? `<span style="color:#e67e22; font-weight:bold;">(내부 메시지)</span> ` : "";
     if (m.plainText?.trim()) {
-      parts.push(escapeHtml(m.plainText.trim()).replace(/\n/g, "<br>"));
+      parts.push(privatePrefix + escapeHtml(m.plainText.trim()).replace(/\n/g, "<br>"));
     }
     if (m.files && m.files.length > 0) {
       for (const f of m.files) {
-        parts.push(`<a href="https://cf.channel.io/${f.key}" style="color:#1a73e8;">[이미지: ${escapeHtml(f.name)}]</a>`);
+        if (f.publicUrl) {
+          parts.push(`<img src="${escapeHtml(f.publicUrl)}" alt="${escapeHtml(f.name)}" style="max-width:300px; border-radius:8px; margin:4px 0;">`);
+        } else if (chatId) {
+          parts.push(`<a href="https://desk.channel.io/salesmap/user-chats/${chatId}" style="color:#1a73e8;">[이미지: ${escapeHtml(f.name)}]</a>`);
+        } else {
+          parts.push(`<span style="color:#999;">[이미지: ${escapeHtml(f.name)}]</span>`);
+        }
       }
     }
 
@@ -122,6 +131,11 @@ export function buildMemoText(detailedSummary: string, conversationHtml: string)
 <h3 style="margin:0 0 12px 0;">대화 원문</h3>
 <div style="padding:8px;">${conversationHtml}</div>
 </div>`;
+}
+
+/** 내부 메시지 여부 */
+function isPrivate(m: ChannelMessage): boolean {
+  return m.options?.includes("private") ?? false;
 }
 
 /** HTML 이스케이프 */

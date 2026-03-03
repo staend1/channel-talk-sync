@@ -18,6 +18,8 @@ export interface ChannelFile {
   height?: number;
   bucket: string;
   key: string;
+  /** Supabase Storage 공개 URL (이미지 업로드 후 설정) */
+  publicUrl?: string;
 }
 
 export interface ChannelMessage {
@@ -28,6 +30,7 @@ export interface ChannelMessage {
   createdAt: number;
   blocks: { type: string; value?: string }[];
   files?: ChannelFile[];
+  options?: string[];
 }
 
 export interface ChannelUserChat {
@@ -108,6 +111,14 @@ export async function getChatMessages(userChatId: string): Promise<ChannelMessag
   }
 
   return allMessages;
+}
+
+/** 파일의 Signed URL 발급 */
+export async function getSignedFileUrl(userChatId: string, fileKey: string): Promise<string> {
+  const data = await fetchAPI<{ result: string }>(
+    `/open/v5/user-chats/${userChatId}/messages/file?key=${encodeURIComponent(fileKey)}`
+  );
+  return data.result;
 }
 
 /** 유저 상세 조회 */

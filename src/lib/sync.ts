@@ -2,10 +2,12 @@ import {
   getClosedChats,
   getChatMessages,
   getUser,
+  getSignedFileUrl,
   type ChannelUserChat,
   type ChannelUser,
   type ChannelManager,
 } from "./channel-talk";
+import { uploadImageToStorage } from "./supabase";
 import {
   findPeopleByEmail,
   createPeople,
@@ -142,6 +144,20 @@ async function processChat(
   const messages = await getChatMessages(chatId);
   console.log(`[sync] 메시지 ${messages.length}건 조회`);
 
+  // 1.5 이미지 → Supabase Storage 업로드
+  for (const m of messages) {
+    if (!m.files || m.files.length === 0) continue;
+    for (const f of m.files) {
+      if (!f.contentType?.startsWith("image/")) continue;
+      try {
+        const signedUrl = await getSignedFileUrl(chatId, f.key);
+        f.publicUrl = await uploadImageToStorage(signedUrl, chatId, f.id, f.contentType);
+      } catch (e) {
+        console.warn(`[sync] 이미지 업로드 실패 (${f.name}): ${(e as Error).message}`);
+      }
+    }
+  }
+
   // 2. 대화 포맷팅
   const conversationText = formatConversation({ messages, managers, user });
 
@@ -174,11 +190,13 @@ async function processChat(
   }
 
   // 7. 채널톡 커스텀 오브젝트 생성
+  const channelTalkLink = `https://desk.channel.io/salesmap/user-chats/${user.name}-${chatId}`;
   const fieldList: { name: string; [key: string]: unknown }[] = [
     { name: "문의 내용", stringValue: analysis.shortSummary },
     { name: "문의 유형", stringValueList: [analysis.inquiryType] },
     { name: "기능 카테고리", stringValueList: [analysis.featureCategory] },
     { name: "생성 날짜", dateValue: new Date(chat.closedAt).toISOString() },
+    { name: "채널톡 링크", stringValue: channelTalkLink },
   ];
 
   // 채널톡 프로필 이중 저장
@@ -207,11 +225,12 @@ async function processChat(
   );
   console.log(`[sync] 채널톡 오브젝트 생성: ${customObject.id}`);
 
-  // 8. 노트 생성 (고객에만 → 채널톡 커오로 자동 전파)
-  const conversationHtml = formatConversationHtml({ messages, managers, user });
+  // 8. 노트 생성 (고객 + 채널톡 커오 양쪽)
+  const conversationHtml = formatConversationHtml({ messages, managers, user, chatId });
   const memoText = buildMemoText(analysis.detailedSummary, conversationHtml);
   await updatePeople(peopleId, { memo: memoText });
-  console.log("[sync] 노트 생성 완료");
+  await createCustomObjectMemo(customObject.id, memoText);
+  console.log("[sync] 노트 생성 완료 (고객 + 채널톡)");
 
   // 9. 처리 완료 기록
   await markProcessed({
