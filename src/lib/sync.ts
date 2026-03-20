@@ -74,22 +74,29 @@ async function buildFullWorkspaceMap() {
   console.log(`[sync] 워크스페이스 ${entries.length}건 저장`);
 }
 
-/** 워크스페이스 맵에서 못 찾으면 추가분 조회 */
+/** 워크스페이스 맵 갱신 (실행당 1회만) */
+let workspaceMapRefreshed = false;
 async function refreshWorkspaceMap(): Promise<void> {
+  if (workspaceMapRefreshed) {
+    console.log("[sync] 워크스페이스 맵 이미 갱신됨, 스킵");
+    return;
+  }
   console.log("[sync] 워크스페이스 맵 갱신...");
   await buildFullWorkspaceMap();
+  workspaceMapRefreshed = true;
 }
 
-/** 고객 매칭/생성 + 필드 업데이트 */
+/** 고객 매칭/생성 + 필드 업데이트 (이메일 없으면 null 반환) */
 async function matchOrCreatePeople(
   user: ChannelUser,
   workspaceRecordId: string | null
-): Promise<string> {
+): Promise<string | null> {
   const email = (user.profile?.salesmap_email || user.profile?.email || user.email) as string;
   const name = (user.profile?.salesmap_name || user.name) as string;
 
   if (!email) {
-    throw new Error(`이메일 없음: userId=${user.id}, name=${user.name}`);
+    console.warn(`[sync] 이메일 없음 (${name}), 고객 연결 없이 진행`);
+    return null;
   }
 
   // 1. 이메일로 검색
@@ -212,7 +219,7 @@ async function processChat(
   }
 
   // 고객 연결 (문의자 = multiPeople 관계 필드)
-  fieldList.push({ name: "문의자", peopleValueIdList: [peopleId] });
+  if (peopleId) fieldList.push({ name: "문의자", peopleValueIdList: [peopleId] });
 
   // 워크스페이스 연결 (채널톡 → 워크스페이스)
   if (workspaceRecordId) {
@@ -228,7 +235,7 @@ async function processChat(
   // 8. 노트 생성 (고객 + 채널톡 커오 양쪽)
   const conversationHtml = formatConversationHtml({ messages, managers, user, chatId });
   const memoText = buildMemoText(analysis.detailedSummary, conversationHtml);
-  await updatePeople(peopleId, { memo: memoText });
+  if (peopleId) await updatePeople(peopleId, { memo: memoText });
   await createCustomObjectMemo(customObject.id, memoText);
   console.log("[sync] 노트 생성 완료 (고객 + 채널톡)");
 

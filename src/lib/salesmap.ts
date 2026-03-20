@@ -32,8 +32,13 @@ interface PeopleSearchResult {
 
 /** 이메일로 고객 검색 (전체 필드 반환) */
 export async function findPeopleByEmail(email: string): Promise<Record<string, unknown> | null> {
-  const data = await fetchAPI<PeopleSearchResult>(`/people-temp/${encodeURIComponent(email)}`);
-  return data.data.people.length > 0 ? data.data.people[0] : null;
+  try {
+    const data = await fetchAPI<PeopleSearchResult>(`/people-temp/${encodeURIComponent(email)}`);
+    return data.data.people.length > 0 ? data.data.people[0] : null;
+  } catch {
+    // 검색 실패 = 없음 (400 "고객을 찾을 수 없습니다" 등)
+    return null;
+  }
 }
 
 interface FieldListItem {
@@ -50,17 +55,32 @@ interface FieldListItem {
   stringValueList?: string[];
 }
 
-/** 고객 생성 */
+/** 고객 생성 (이미 존재하면 기존 ID 반환) */
 export async function createPeople(
   name: string,
   fieldList?: FieldListItem[]
 ): Promise<{ id: string; name: string }> {
   const body: Record<string, unknown> = { name };
   if (fieldList) body.fieldList = fieldList;
-  const data = await fetchAPI<{ success: boolean; data: { people: { id: string; name: string } } }>(
-    "/people",
-    { method: "POST", body: JSON.stringify(body) }
-  );
+
+  await sleep(DELAY_MS);
+  const res = await fetch(`${BASE_URL}/people`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const json = await res.json().catch(() => null);
+    // "동일한 이메일을 가진 고객이 존재합니다" → 기존 ID 반환
+    if (json?.data?.id) {
+      console.log(`[salesmap] 기존 고객 사용: ${json.data.name} (${json.data.id})`);
+      return { id: json.data.id, name: json.data.name };
+    }
+    throw new Error(`Salesmap API error ${res.status}: ${JSON.stringify(json)}`);
+  }
+
+  const data = await res.json();
   return data.data.people;
 }
 
