@@ -202,6 +202,7 @@ async function processChat(
     { name: "문의 내용", stringValue: analysis.shortSummary },
     { name: "문의 유형", stringValueList: [analysis.inquiryType] },
     { name: "기능 카테고리", stringValueList: [analysis.featureCategory] },
+    { name: "인입 날짜", dateValue: new Date(chat.createdAt).toISOString() },
     { name: "생성 날짜", dateValue: new Date(chat.closedAt).toISOString() },
     { name: "채널톡 링크", stringValue: channelTalkLink },
   ];
