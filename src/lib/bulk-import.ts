@@ -145,8 +145,9 @@ async function processChat(
   const channelTalkLink = `https://desk.channel.io/salesmap/user-chats/${name}-${chatId}`;
   const fieldList: { name: string; [key: string]: unknown }[] = [
     { name: "문의 내용", stringValue: analysis.shortSummary },
-    { name: "문의 유형", stringValueList: [analysis.inquiryType] },
-    { name: "기능 카테고리", stringValueList: [analysis.featureCategory] },
+    { name: "문의 유형", stringValueList: analysis.inquiryType },
+    { name: "기능 카테고리 대분류", stringValueList: analysis.featureCategoryLarge },
+    { name: "기능 카테고리 중분류", stringValueList: analysis.featureCategoryMedium },
     { name: "생성 날짜", dateValue: new Date(chat.closedAt).toISOString() },
     { name: "채널톡 링크", stringValue: channelTalkLink },
   ];

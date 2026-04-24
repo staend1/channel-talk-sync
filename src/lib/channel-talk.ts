@@ -126,3 +126,9 @@ export async function getUser(userId: string): Promise<ChannelUser> {
   const data = await fetchAPI<{ user: ChannelUser }>(`/open/v5/users/${userId}`);
   return data.user;
 }
+
+/** 상담 단일 조회 */
+export async function getUserChat(userChatId: string): Promise<ChannelUserChat> {
+  const data = await fetchAPI<{ userChat: ChannelUserChat }>(`/open/v5/user-chats/${userChatId}`);
+  return data.userChat;
+}
