@@ -172,7 +172,7 @@ async function processChat(
   console.log("[sync] Gemini 분석 중...");
   const analysis = await analyzeConversation(conversationText);
   console.log(`[sync] 요약: ${analysis.shortSummary}`);
-  console.log(`[sync] 분류: ${analysis.inquiryType} / ${analysis.featureCategory}`);
+  console.log(`[sync] 분류: ${analysis.inquiryType.join(",")} / ${analysis.featureCategoryLarge.join(",")}`);
 
   // 4. 워크스페이스 매칭 (고객 연결에 필요하므로 먼저)
   const roomId = user.profile?.salesmap_room_Id as string;
@@ -198,10 +198,13 @@ async function processChat(
 
   // 7. 채널톡 커스텀 오브젝트 생성
   const channelTalkLink = `https://desk.channel.io/salesmap/user-chats/${user.name}-${chatId}`;
+  const plan = (user.profile?.salesmap_plan as string) || "미확인";
   const fieldList: { name: string; [key: string]: unknown }[] = [
     { name: "문의 내용", stringValue: analysis.shortSummary },
-    { name: "문의 유형", stringValueList: [analysis.inquiryType] },
-    { name: "기능 카테고리", stringValueList: [analysis.featureCategory] },
+    { name: "문의 유형", stringValueList: analysis.inquiryType },
+    { name: "기능 카테고리 대분류", stringValueList: analysis.featureCategoryLarge },
+    { name: "기능 카테고리 중분류", stringValueList: analysis.featureCategoryMedium },
+    { name: "워크스페이스 Plan", stringValue: plan },
     { name: "인입 날짜", dateValue: new Date(chat.createdAt).toISOString() },
     { name: "생성 날짜", dateValue: new Date(chat.closedAt).toISOString() },
     { name: "채널톡 링크", stringValue: channelTalkLink },

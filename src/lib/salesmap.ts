@@ -126,6 +126,17 @@ export async function createCustomObject(
   return data.data.customObject;
 }
 
+/** 커스텀 오브젝트 필드 수정 */
+export async function updateCustomObject(
+  customObjectId: string,
+  fieldList: FieldListItem[]
+): Promise<void> {
+  await fetchAPI(`/custom-object/${customObjectId}`, {
+    method: "POST",
+    body: JSON.stringify({ fieldList }),
+  });
+}
+
 /** 커스텀 오브젝트에 메모(노트) 생성 */
 export async function createCustomObjectMemo(
   customObjectId: string,
